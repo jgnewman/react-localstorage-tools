@@ -38,7 +38,7 @@ const {
 
 In the vast majority of cases, you will only need to work with the context tools and the hooks. The basic utilities and pubsub tools are available for those rarer cases when you need to deal with localStorage outside of the React render cycle, but still need your React app to pick up on those changes (or _vice versa_).
 
-At this point, you can spin up a React app and start using localStorage as if it was any other kind of React state:
+At this point, you can spin up a React app and start using localStorage as if it was any other kind of React state. In our example, we'll wrap our UI in the `StorageContextProvider`, which will allow us to use the `useStoredState` hook within all nested components:
 
 ```typescript
 const MyComponent = () => {
