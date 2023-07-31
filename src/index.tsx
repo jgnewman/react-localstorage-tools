@@ -51,12 +51,6 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
 ) => {
   type Getter = <K extends keyof T>(key: K) => T[K]
   type Setter = <K extends keyof T>(key: K, val: T[K]) => void
-
-  type StorageContextTools = {
-    getStoredState: Getter
-    setStoredState: Setter
-  }
-
   type BooleanKeys = KeysWithBooleanValue<T>
 
   /**
@@ -154,12 +148,12 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
 
   /** Context tools */
 
-  const initialContext: StorageContextTools = {
+  const initialContext = {
     getStoredState: getItem,
     setStoredState: setItem,
   }
 
-  const StorageContext = createContext<StorageContextTools>(initialContext)
+  const StorageContext = createContext(initialContext)
 
   const useStorageContext = () => {
     const context = useContext(StorageContext)
