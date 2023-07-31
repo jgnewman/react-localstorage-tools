@@ -145,7 +145,7 @@ Automatically serializes and stores a value in localStorage. Also publishes a `S
 function removeItem<K extends keyof Defaults>(key: K): void
 ```
 
-Automatically serializes and stores a value in localStorage. Also publishes a `REMOVE` change event that can be observed via `subscribeToStorageChange`.
+Removes a value from localStorage. Also publishes a `REMOVE` change event that can be observed via `subscribeToStorageChange`.
 
 ### `publishStorageChange`
 
@@ -200,7 +200,7 @@ const { getStoredState } = React.useContext(storageContext)
 const name = getStoredState('name')
 ```
 
-Provides access to a stored value by key. Whenever a change occurs in localStorage, your component will automatically re-render with the correct value.
+Provides access to a stored value by key. The value is automatically deserialized as necessary when retrieved. Whenever a change occurs in localStorage, your component will automatically re-render with the correct value.
 
 #### `setStoredState`
 
@@ -215,7 +215,7 @@ const { setStoredState } = React.useContext(storageContext)
 const handleClickSubmit = () => setStoredState('name', 'Bill')
 ```
 
-Allows you to update a stored value and thereby trigger re-renders of any components using the `storageContext` so that they can receive the proper, updated value.
+Allows you to update a stored value, which will be automatically serialized for you when stored. Calling this automatically triggers a re-render for all components using the `storageContext` so that they can receive the proper, updated value.
 
 #### `removeStoredState`
 
@@ -252,7 +252,7 @@ const [name, setName, removeName] = useStoredState('name')
 // string, (val: string) => void, () => void
 ```
 
-A hook providing you with quick access via context to a particular localStorage value by key. It returns an array containing the current value, a function for updating the value, and a function for removing the value. Setting or removing the value will trigger re-renders as expected such that any components depending on the localStorage context will update automatically with proper values.
+A hook providing you with quick access via context to a particular localStorage value by key. It returns an array containing the deserialized current value, a function for updating the value, and a function for removing the value. Setting or removing the value will trigger re-renders as expected such that any components depending on the localStorage context will update automatically with proper values.
 
 ### `useStoredBoolean`
 
@@ -266,4 +266,4 @@ const [bool, setTrue, setFalse] = useStoredBoolean('myBooleanKey')
 // boolean, () => void, () => void
 ```
 
-A hook providing you with quick access via context to a particual boolean localStorage value by key. It returns an array containing the current value, a function for setting the value to true, and a function for setting the value to false. Updating the value will trigger re-renders as expected such that any components depending on the localStorage context will update automatically with proper values.
+A hook providing you with quick access via context to a particual boolean localStorage value by key. It returns an array containing the current boolean value, a function for setting the value to true, and a function for setting the value to false. Updating the value will trigger re-renders as expected such that any components depending on the localStorage context will update automatically with proper values.
