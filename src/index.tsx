@@ -2,7 +2,7 @@ import type {
   LocalStorageDefaults,
   StorageListener,
   KeysWithBooleanValue,
-  LocalStorageAPIStub,
+  LocalStorageToolsConfig,
 } from 'types'
 import React, {
   ReactNode,
@@ -14,40 +14,14 @@ import React, {
   useState,
 } from 'react'
 import { hasLocalStorage, safeGetFromStorage, safeSetInStorage } from 'stubs'
+import safeParse from 'safeParse'
+import migrateStorage from 'migrations'
 
 export { hasLocalStorage } from 'stubs'
 
-/**
- * Safely attempts to parse any value. This is important because we are running
- * JSON.stringify on every value we put into localStorage. This means we could end up
- * with strings that look like this for exampe: '"foo"'
- *
- * This function can take the following values and return them all correctly:
- * '"foo"' -> "foo"
- * "foo" -> "foo"
- * { bar: "foo" } -> { bar: "foo" }
- * '{ "bar": "foo" }' -> { bar: "foo" }
- * ["foo"] -> ["foo"]
- * '["foo"]' -> ["foo"]
- * etc...
- *
- * Also works as expected with numbers and other values like null or undefined.
- * "4" -> 4
- * 4 -> 4
- * etc...
- */
-const safeParse = <T,>(value: any): T => {
-  try {
-    const json = `{ "value": ${value} }`
-    return JSON.parse(json).value as T
-  } catch (_) {
-    return value as T
-  }
-}
-
 const createLocalStorageTools = <T extends LocalStorageDefaults>(
   defaults: T,
-  apiStub?: LocalStorageAPIStub,
+  { apiStub, migrations }: LocalStorageToolsConfig = {},
 ) => {
   type Getter = <K extends keyof T>(key: K) => T[K]
   type Setter = <K extends keyof T>(key: K, val: T[K]) => void
@@ -57,6 +31,7 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
    * Initial setup:
    * - Prove that all keys in defaults are strings
    * - Pick our API functions (stubbed or not)
+   * - Run migrations
    * - Hydrate localStorage with defaults
    */
 
@@ -73,6 +48,8 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
   const safeGetItem =
     (!hasLocalStorage && apiStub?.getItem) || safeGetFromStorage
   const safeSetItem = (!hasLocalStorage && apiStub?.setItem) || safeSetInStorage
+
+  migrations && migrateStorage(migrations)
 
   Object.entries(defaults).forEach(([storageKey, defaultVal]) => {
     if (defaultVal === null) {

@@ -66,13 +66,13 @@ Try it out and watch the Local Storage table in your dev tools update while you 
 
 > **Before you get started for real:**
 >
-> Keep in mind that `null` has a special meaning when dealing with localStorage. When you attempt to call `localStorage.getItem` on some key that does not exist, it returns `null`. For this reason, you are not allowed to specify any of your default values as `null`.
+> Keep in mind that `null` has a special meaning when dealing with localStorage. When you attempt to call `localStorage.getItem` on some key that does not exist, it returns `null`. For this reason, you are not allowed to specify any of your default values as `null`. In fact, all localStorage values must become strings at the point of actual storage, meaning that you will not be allowed to store any nullish or unserializable values at all. The values provided within your defaults object will determine which data type is allowed for each key (no switching between string and number on a single key, for example).
 >
-> Additionally, because we want to think about localStorage values in terms of persistent state, we don't actually want to _remove_ them as part of the application lifecycle. For example, tools such as React's `useState` and even Redux allow updating the value of keys on the state, but do not allow deleting keys altogether because doing so could have unexpected consequences (and also annoyingly force all of our types to be nullable). For that reason, this package deliberately does not provide access to `localStorage.removeItem`.
+> Additionally, because we want to think about localStorage in terms of persistent application state, we don't actually want to _remove_ any values as part of the application lifecycle. For example, tools such as React's `useState` and even Redux allow updating the value of keys on the state, but do not allow deleting keys altogether because doing so could have unexpected consequences (and also annoyingly force all of our types to be nullable). For that reason, this package deliberately does not provide access to `localStorage.removeItem`. If you manually call `removeItem` on a value, TypeScript can not know this and your types will begin lying to you.
 
 ## What happens when localStorage is unavailable?
 
-Sometimes your app renders intially on the server side. Also, users occasionally disable localStorage for various reasons. When this happens, react-localstorage-tools will continue to work as expected _mostly_. It defaults to storing all of your values in an in-memory `Map` so everything will continue to work as expected within a single browser tab until the tab is closed or refreshed, at which point all stored values will reset back to default.
+Sometimes your app renders intially on the server side. Also, users occasionally disable localStorage for various reasons. When this happens, react-localstorage-tools will continue to work as expected _mostly_. It defaults to storing all of your values in an in-memory `Map` so that everything will continue to work as expected within a single browser tab until the tab is closed or refreshed, at which point all stored values will reset back to default.
 
 The library also provides access to a boolean called `hasLocalStorage` that will tell you whether or not localStorage is available in a given environment so that you can make decisions as necessary.
 
@@ -87,12 +87,53 @@ interface LocalStorageAPIStub {
 // To actually use your stub...
 
 createLocalStorageTools(localStorageDefaults, {
-  getItem: /* stub fn */,
-  setItem: /* stub fn */,
+  apiStub: {
+    getItem: /* stub fn */,
+    setItem: /* stub fn */,
+  }
 })
 ```
 
 Your stub will be applied only in the case where no localStorage is detected. This will allow you to fall back to using sessionStorage or cookies or whatever you might want to do.
+
+## What happens when keys get stale?
+
+Sometimes you need to make updates to your application that involve changing the way values are stored in localStorage. It's sad to have to leave the old values sitting around unused, and a bit annoying to try and convert stale keys into fresh data that works with your new changes. For these circumstances, you can provide an array of localStorage migrations to your application that allow you to automatically map old data to new data before the rest of the system is initialized.
+
+Migrations take the following form:
+
+```typescript
+type LocalStorageMigrations = Array<{
+  key: string
+  mapTo: string | null | ((value: any) => { key: string; value: any })
+}>
+
+// To actually use your migrations...
+
+createLocalStorageTools(localStorageDefaults, {
+  migrations: [
+    {
+      key: 'someOldKey',
+      mapTo: 'someNewKey',
+    },
+    {
+      key: 'someUndesirableKey',
+      mapTo: null,
+    },
+    {
+      key: 'someOldKeyWithTheWrongDataType',
+      mapTo: (value: number) => ({
+        key: 'someNewKeyWithTheRightDataType',
+        value: value.toString(),
+      }),
+    },
+  ],
+})
+```
+
+Each of your migrations will be run in sequence, thus allowing you to junk up your users' localStorage to your heart's content and continue to migrate things forward infinitely. Made a new change? Just add a new migration into the list. If the new key being mapped to has a different name than the old key, the old key will be deleted after the migration runs. Mapping to `null` is the best way to say "delete this key".
+
+Your defaults object will be used to hydrate localStorage only _after_ migrations run. This way you can map some old data to a correct, already-stored value that will not be overwritten by a default.
 
 ## API
 

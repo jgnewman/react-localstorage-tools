@@ -6,14 +6,14 @@ import type { GetItemStub, SetItemStub } from 'types'
  *
  * https://bugs.webkit.org/show_bug.cgi?id=157010
  */
-const testLocalStorage = () => {
+export const testLocalStorage = () => {
   if (typeof window === 'undefined') return false
-  const now = Date.now()
   try {
-    window.localStorage.setItem(now + '_local_storage_test', '1')
-    window.localStorage.removeItem(now + '_local_storage_test')
+    window.localStorage.setItem('__local_storage_test__', '1')
+    window.localStorage.removeItem('__local_storage_test__')
     return true
-  } catch (e) {
+  } catch (_) {
+    console.log(_)
     return false
   }
 }

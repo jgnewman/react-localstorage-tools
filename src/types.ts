@@ -15,3 +15,20 @@ export interface LocalStorageAPIStub {
   getItem: GetItemStub
   setItem: SetItemStub
 }
+
+export interface StorageMigrationResult {
+  key: string
+  value: any
+}
+
+export type StorageMigrationFunction = (value: any) => StorageMigrationResult
+
+export interface StorageMigration {
+  key: string
+  mapTo: string | null | StorageMigrationFunction
+}
+
+export interface LocalStorageToolsConfig {
+  apiStub?: LocalStorageAPIStub
+  migrations?: StorageMigration[]
+}

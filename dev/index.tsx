@@ -2,9 +2,6 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import createLocalStorageTools from '../src'
 
-// TODO: Is there a way to narrow reactivity such that we only re-render when the value of specific
-// keys we care about change?
-
 // TODO: Add a test suite
 
 const localStorageDefaults = {
@@ -14,7 +11,14 @@ const localStorageDefaults = {
 }
 
 const { StorageContextProvider, useStoredState, useStoredBoolean, setItem } =
-  createLocalStorageTools(localStorageDefaults)
+  createLocalStorageTools(localStorageDefaults, {
+    migrations: [
+      {
+        key: 'someOldStorageKey',
+        mapTo: null,
+      },
+    ],
+  })
 
 // @ts-ignore
 window.setItem = setItem
