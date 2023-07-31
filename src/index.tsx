@@ -1,7 +1,6 @@
 import type {
   LocalStorageDefaults,
   StorageListener,
-  StorageChange,
   KeysWithBooleanValue,
   LocalStorageAPIStub,
 } from 'types'
@@ -14,12 +13,7 @@ import React, {
   useMemo,
   useState,
 } from 'react'
-import {
-  hasLocalStorage,
-  safeGetFromStorage,
-  safeSetInStorage,
-  safeRemoveFromStorage,
-} from 'stubs'
+import { hasLocalStorage, safeGetFromStorage, safeSetInStorage } from 'stubs'
 
 export { hasLocalStorage } from 'stubs'
 
@@ -56,14 +50,11 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
   apiStub?: LocalStorageAPIStub,
 ) => {
   type Getter = <K extends keyof T>(key: K) => T[K]
-  type NullableGetter = <K extends keyof T>(key: K) => T[K] | null
   type Setter = <K extends keyof T>(key: K, val: T[K]) => void
-  type Remover = <K extends keyof T>(key: K) => void
 
   type StorageContextTools = {
-    getStoredState: NullableGetter
+    getStoredState: Getter
     setStoredState: Setter
-    removeStoredState: Remover
   }
 
   type BooleanKeys = KeysWithBooleanValue<T>
@@ -88,29 +79,31 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
   const safeGetItem =
     (!hasLocalStorage && apiStub?.getItem) || safeGetFromStorage
   const safeSetItem = (!hasLocalStorage && apiStub?.setItem) || safeSetInStorage
-  const safeRemoveItem =
-    (!hasLocalStorage && apiStub?.removeItem) || safeRemoveFromStorage
 
-  try {
-    Object.entries(defaults).forEach(([storageKey, defaultVal]) => {
-      if (defaultVal === null) {
-        throw new Error(
-          `Default value for \`${storageKey}\` cannot be null. Retrieving a null value from localStorage indicates the key does not exist.`,
-        )
-      }
+  Object.entries(defaults).forEach(([storageKey, defaultVal]) => {
+    if (defaultVal === null) {
+      throw new Error(
+        `Default value for \`${storageKey}\` cannot be null. Retrieving a null value from localStorage indicates the key does not exist.`,
+      )
+    }
+    try {
       const existingVal = safeGetItem(storageKey)
       if (existingVal === null) {
         safeSetItem(storageKey, JSON.stringify(defaultVal))
       }
-    })
-  } catch (_) {}
+    } catch (_) {
+      throw new Error(
+        `Failed to hydrate localStorage key \`${storageKey}\`. Did you provide a broken stub API?`,
+      )
+    }
+  })
 
   /** PubSub tools */
 
   let listeners: StorageListener<T>[] = []
 
-  const publishStorageChange = (key: keyof T, change: StorageChange) => {
-    listeners.forEach((listener) => listener(key, change))
+  const publishStorageChange = (key: keyof T) => {
+    listeners.forEach((listener) => listener(key))
   }
 
   const subscribeToStorageChange = (listener: StorageListener<T>) => {
@@ -123,35 +116,47 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
 
   /** Raw storage manipulators */
 
-  const getItem: NullableGetter = <K extends keyof T>(key: K) => {
+  const getItem: Getter = <K extends keyof T>(key: K) => {
+    let val: string | null
     try {
-      const val = safeGetItem(key as string)
-      return val === null ? null : (safeParse(val) as T[K])
+      val = safeGetItem(key as string)
     } catch (_) {
-      return null
+      throw new Error(
+        `The key \`${
+          key as string
+        }\` was irretrievable. Did you provide a broken stub API?`,
+      )
+    }
+    if (val === null) {
+      throw new Error(
+        `The \`${
+          key as string
+        }\` key does not exist. You may have manually deleted it or forgotten to provide a default value.`,
+      )
+    }
+    try {
+      return safeParse(val) as T[K]
+    } catch (_) {
+      throw new Error(
+        `The key \`${
+          key as string
+        }\` was unserializable. It may have been corrupted.`,
+      )
     }
   }
 
   const setItem: Setter = (key, val) => {
     try {
       safeSetItem(key as string, JSON.stringify(val))
-      publishStorageChange(key, 'SET')
-    } catch (_) {}
-  }
-
-  const removeItem: Remover = (key) => {
-    try {
-      safeRemoveItem(key as string)
-      publishStorageChange(key, 'REMOVE')
+      publishStorageChange(key)
     } catch (_) {}
   }
 
   /** Context tools */
 
   const initialContext: StorageContextTools = {
-    getStoredState: () => null,
-    setStoredState: () => undefined,
-    removeStoredState: () => undefined,
+    getStoredState: getItem,
+    setStoredState: setItem,
   }
 
   const StorageContext = createContext<StorageContextTools>(initialContext)
@@ -165,12 +170,6 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
   const StorageContextProvider = ({ children }: { children: ReactNode }) => {
     const [lastUpdatedKey, triggerRender] = useState({ key: '' })
 
-    // We can safely use ! on getItem because defaults are stored on mount
-    // and we are locked into working only with keys provided in the defaults.
-    const getStoredState: Getter = useCallback((k) => getItem(k)!, [])
-    const setStoredState: Setter = useCallback((k, v) => setItem(k, v), [])
-    const removeStoredState: Remover = useCallback((k) => removeItem(k), [])
-
     useEffect(() => {
       const listener: StorageListener<T> = <K extends keyof T>(key: K) => {
         triggerRender({ key: key as string })
@@ -179,17 +178,12 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
       return () => unsubscribeFromStorageChange(listener)
     }, [])
 
+    // The lastUpdatedKey exists on the object in order to make sure a new tools
+    // object is created when a new storage value is set, thereby getting components
+    // using this context to actually re-render.
     const tools = useMemo(
-      () => ({
-        // This value exists on the object in order to make sure a new tools object is
-        // created when a new storage value is set, thereby getting components using
-        // this context to actually re-render.
-        lastUpdatedKey,
-        getStoredState,
-        setStoredState,
-        removeStoredState,
-      }),
-      [getStoredState, removeStoredState, setStoredState, lastUpdatedKey],
+      () => ({ ...initialContext, lastUpdatedKey }),
+      [lastUpdatedKey],
     )
 
     return (
@@ -203,31 +197,16 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
 
   const useStoredState = <K extends keyof T, V extends T[K]>(
     key: K,
-  ): [V, (val: V) => void, VoidFunction] => {
-    const { getStoredState, setStoredState, removeStoredState } =
-      useStorageContext()
-
+  ): [V, (val: V) => void] => {
+    const { getStoredState, setStoredState } = useStorageContext()
     const value = getStoredState(key)
-
-    if (value === null) {
-      throw new Error(
-        `No value found for localStorage key: \`${
-          key as string
-        }\`. Did you forget to provide a default value?`,
-      )
-    }
 
     const setValue = useCallback(
       (value: V) => setStoredState(key, value),
       [key, setStoredState],
     )
 
-    const removeValue = useCallback(
-      () => removeStoredState(key),
-      [key, removeStoredState],
-    )
-
-    return [value, setValue, removeValue]
+    return [value, setValue]
   }
 
   const useStoredBoolean = <K extends BooleanKeys>(
@@ -252,7 +231,6 @@ const createLocalStorageTools = <T extends LocalStorageDefaults>(
     unsubscribeFromStorageChange,
     getItem,
     setItem,
-    removeItem,
     StorageContext,
     StorageContextProvider,
     useStorageContext,

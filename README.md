@@ -18,7 +18,6 @@ const {
   // Some basic localStorage utilities
   getItem,
   setItem,
-  removeItem,
 
   // Some pubsub tools
   publishStorageChange,
@@ -65,7 +64,11 @@ const App = () => {
 
 Try it out and watch the Local Storage table in your dev tools update while you type!
 
-> **Before you get started for real**, keep in mind that `null` has a special meaning when dealing with localStorage. When you attempt to call `localStorage.getItem` on some key that does not exist, it returns `null`. For this reason, you are not allowed to specify any of your default values as `null`.
+> **Before you get started for real:**
+>
+> Keep in mind that `null` has a special meaning when dealing with localStorage. When you attempt to call `localStorage.getItem` on some key that does not exist, it returns `null`. For this reason, you are not allowed to specify any of your default values as `null`.
+>
+> Additionally, because we want to think about localStorage values in terms of persistent state, we don't actually want to _remove_ them as part of the application lifecycle. For example, tools such as React's `useState` and even Redux allow updating the value of keys on the state, but do not allow deleting keys altogether because doing so could have unexpected consequences (and also annoyingly force all of our types to be nullable). For that reason, this package deliberately does not provide access to `localStorage.removeItem`.
 
 ## What happens when localStorage is unavailable?
 
@@ -79,7 +82,6 @@ If you'd like, you can even provide your own localStorage API stub taking the fo
 interface LocalStorageAPIStub {
   getItem: (key: string) => string | null
   setItem: (key: string, value: string) => void
-  removeItem: (key: string) => void
 }
 
 // To actually use your stub...
@@ -87,7 +89,6 @@ interface LocalStorageAPIStub {
 createLocalStorageTools(localStorageDefaults, {
   getItem: /* stub fn */,
   setItem: /* stub fn */,
-  removeItem: /* stub fn */,
 })
 ```
 
@@ -124,7 +125,7 @@ const tools = createLocalStorageTools(localStorageDefaults /*, stubApi */)
 
 ```typescript
 // where Defaults = typeof YOUR_DEFAULTS_OBJECT
-function getItem<K extends keyof Defaults>(key: K): Defaults[K] | null
+function getItem<K extends keyof Defaults>(key: K): Defaults[K]
 ```
 
 Retrieves and automatically de-serializes a value from localStorage by key name.
@@ -136,58 +137,43 @@ Retrieves and automatically de-serializes a value from localStorage by key name.
 function setItem<K extends keyof Defaults>(key: K, val: Defaults[K]): void
 ```
 
-Automatically serializes and stores a value in localStorage. Also publishes a `SET` change event that can be observed via `subscribeToStorageChange`.
-
-### `removeItem`
-
-```typescript
-// where Defaults = typeof YOUR_DEFAULTS_OBJECT
-function removeItem<K extends keyof Defaults>(key: K): void
-```
-
-Removes a value from localStorage. Also publishes a `REMOVE` change event that can be observed via `subscribeToStorageChange`.
+Automatically serializes and stores a value in localStorage. Also publishes a change event that can be observed via `subscribeToStorageChange`.
 
 ### `publishStorageChange`
 
 ```typescript
 // where Defaults = typeof YOUR_DEFAULTS_OBJECT
-function publishStorageChange(
-  key: keyof Defaults,
-  change: 'SET' | 'REMOVE',
-): void
+function publishStorageChange(key: keyof Defaults): void
 ```
 
-Alerts all subscribers to the fact that a change has occurred, calling each one with the provided `key` and `change`. Subscribers can be created via `subscribeToStorageChange`.
+Alerts all subscribers to the fact that a change has occurred, calling each one with the provided `key`. Subscribers can be created via `subscribeToStorageChange`.
 
 ### `subscribeToStorageChange`
 
 ```typescript
-function subscribeToStorageChange(listener: StorageListener): void
-
 // where Defaults = typeof YOUR_DEFAULTS_OBJECT
-type StorageListener = (key: keyof Defaults, change?: 'SET' | 'REMOVE') => void
+function subscribeToStorageChange(listener: (key: keyof Defaults) => void): void
 ```
 
-Registers a listener function that will be called whenever a localStorage value is changed or removed. The listener receives the key whose value was changed and the type of change that occurred. Changes can be published to all listeners via `publishStorageChange`.
+Registers a listener function that will be called whenever a localStorage value is changed. The listener receives the key whose value was changed. Changes can be published to all listeners via `publishStorageChange`.
 
 ### `unsubscribeFromStorageChange`
 
 ```typescript
-function unsubscribeFromStorageChange(listener: StorageListener): void
-
 // where Defaults = typeof YOUR_DEFAULTS_OBJECT
-type StorageListener = (key: keyof Defaults, change?: 'SET' | 'REMOVE') => void
+function unsubscribeFromStorageChange(
+  listener: (key: keyof Defaults) => void,
+): void
 ```
 
 Unregisters a listener that was registered via `subscribeToStorageChange`.
 
 ### `storageContext`
 
-This is a React context object that can be used with `React.useContext`. It provides access to three useful functions.
+This is a React context object that can be used with `React.useContext`. It provides access to two useful functions.
 
 ```typescript
-const { getStoredState, setStoredState, removeStoredState } =
-  React.useContext(storageContext)
+const { getStoredState, setStoredState } = React.useContext(storageContext)
 ```
 
 #### `getStoredState`
@@ -217,25 +203,12 @@ const handleClickSubmit = () => setStoredState('name', 'Bill')
 
 Allows you to update a stored value, which will be automatically serialized for you when stored. Calling this automatically triggers a re-render for all components using the `storageContext` so that they can receive the proper, updated value.
 
-#### `removeStoredState`
-
-```typescript
-// where Defaults = typeof YOUR_DEFAULTS_OBJECT
-function removeStoredState<K extends keyof Defaults>(key: K): void
-
-const { removeStoredState } = React.useContext(storageContext)
-const handleClickSubmit = () => removeStoredState('name')
-```
-
-Allows you to remove a stored value and thereby trigger re-renders of any components using the `storageContext` so that they can receive the update.
-
 ### `useStorageContext`
 
 This is a convenience hook that allows access to the `storageContext` value and throws a helpful error if you try to use it outside the scope of the context.
 
 ```typescript
-const { getStoredState, setStoredState, removeStoredState } =
-  useStorageContext()
+const { getStoredState, setStoredState } = useStorageContext()
 ```
 
 See `storageContext` for more information.
@@ -246,13 +219,13 @@ See `storageContext` for more information.
 // where Defaults = typeof YOUR_DEFAULTS_OBJECT
 function useStoredState<K extends keyof Defaults, V extends Defaults[K]>(
   key: K,
-): [V, (val: V) => void, VoidFunction]
+): [V, (val: V) => void]
 
-const [name, setName, removeName] = useStoredState('name')
-// string, (val: string) => void, () => void
+const [name, setName] = useStoredState('name')
+// [string, (val: string) => void]
 ```
 
-A hook providing you with quick access via context to a particular localStorage value by key. It returns an array containing the deserialized current value, a function for updating the value, and a function for removing the value. Setting or removing the value will trigger re-renders as expected such that any components depending on the localStorage context will update automatically with proper values.
+A hook providing you with quick access via context to a particular localStorage value by key. It returns an array containing the deserialized current value and a function for updating the value. Setting the value will trigger re-renders as expected such that any components depending on the localStorage context will update automatically with proper values.
 
 ### `useStoredBoolean`
 

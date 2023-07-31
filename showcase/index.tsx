@@ -5,10 +5,6 @@ import createLocalStorageTools from '../src'
 // TODO: Is there a way to narrow reactivity such that we only re-render when the value of specific
 // keys we care about change?
 
-// TODO: We are claiming that values will always exist because we have provided defaults. However,
-// if at any point we call removeItem, then the value will be null. This means we either need to
-// accept that all values are nullable, or we need to stop providing access to removeItem.
-
 // TODO: Add a test suite
 
 const localStorageDefaults = {

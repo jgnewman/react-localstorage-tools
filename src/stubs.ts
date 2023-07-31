@@ -1,4 +1,4 @@
-import type { GetItemStub, RemoveItemStub, SetItemStub } from 'types'
+import type { GetItemStub, SetItemStub } from 'types'
 
 /**
  * Old versions of webkit don't allow access to localStorage in private mode.
@@ -32,10 +32,4 @@ export const safeSetInStorage: SetItemStub = (key, value) => {
   hasLocalStorage
     ? window.localStorage.setItem(key, value)
     : storageStub.set(key, value)
-}
-
-export const safeRemoveFromStorage: RemoveItemStub = (key) => {
-  hasLocalStorage
-    ? window.localStorage.removeItem(key)
-    : storageStub.delete(key)
 }
